@@ -86,9 +86,10 @@
         // Si dejas las comillas vacías (""), se usarán datos de demostración.
         // ==========================================
 
-        // Datos de prueba por si no hay URL configurada
+        // Datos de prueba actualizados para probar duplicados
         const demoData = [
             { name: "Juan Perez", count: "5" },
+            { name: "Juan Gutierrez", count: "3" }, // Agregado para probar coincidencia múltiple
             { name: "María González", count: "10" },
             { name: "José López", count: "2" }
         ];
@@ -101,7 +102,7 @@
             } else {
                 console.log("Usando datos de demostración (Configura la URL en el código para usar datos reales)");
                 currentData = demoData;
-                document.getElementById('statusMsg').innerText = "Modo Demo (Edita el código para agregar tu URL)";
+                document.getElementById('statusMsg').innerText = "Modo Demo (Prueba buscando 'Juan' para ver la advertencia)";
             }
         }
 
@@ -168,9 +169,8 @@
             resultArea.classList.add('hidden');
 
             setTimeout(() => {
-                // Lógica de búsqueda mejorada (sin acentos, case insensitive)
-                // Busca coincidencia exacta o parcial
-                const found = currentData.find(row => {
+                // Lógica de búsqueda: Encontrar TODAS las coincidencias
+                const matches = currentData.filter(row => {
                     const rowName = normalizeText(row.name);
                     // Permitimos que el usuario escriba solo el nombre o nombre y apellido
                     return rowName === input || rowName.includes(input); 
@@ -181,7 +181,9 @@
                 btnText.classList.remove('hidden');
                 resultArea.classList.remove('hidden');
 
-                if (found) {
+                if (matches.length === 1) {
+                    // UN SOLO RESULTADO - ÉXITO
+                    const found = matches[0];
                     resultArea.innerHTML = `
                         <div class="bg-green-50 rounded-xl p-6 border border-green-200">
                             <div class="text-green-600 font-bold uppercase text-xs tracking-wider mb-2">¡Encontrado!</div>
@@ -192,7 +194,22 @@
                             </div>
                         </div>
                     `;
+                } else if (matches.length > 1) {
+                    // MÚLTIPLES RESULTADOS - ADVERTENCIA
+                    resultArea.innerHTML = `
+                        <div class="bg-yellow-50 rounded-xl p-6 border border-yellow-200">
+                            <div class="text-yellow-600 mb-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-800">Se requiere más información</h3>
+                            <p class="text-gray-600 text-sm mt-1">Hay ${matches.length} personas que coinciden con "${rawInput}".</p>
+                            <p class="text-yellow-700 font-medium text-sm mt-2">Por favor escribe tu nombre y apellido.</p>
+                        </div>
+                    `;
                 } else {
+                    // CERO RESULTADOS - ERROR
                     resultArea.innerHTML = `
                         <div class="bg-red-50 rounded-xl p-6 border border-red-200">
                             <div class="text-red-500 mb-2">
