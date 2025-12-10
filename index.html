@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificador de Boletos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 20px;
+            height: 20px;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex flex-col items-center py-10 px-4">
+
+    <!-- Main Container -->
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-blue-600 p-6 text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+            <h1 class="text-2xl font-bold text-white relative z-10">Verificador de Boletos</h1>
+            <p class="text-blue-100 text-sm mt-1 relative z-10">Ingresa tu nombre para consultar</p>
+        </div>
+
+        <!-- Search Section -->
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                <div class="relative">
+                    <input type="text" id="searchInput" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                        placeholder="Ej. Juan Pérez">
+                    <div class="absolute right-3 top-3 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="searchTicket()" 
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 shadow-lg shadow-blue-500/30">
+                <span id="btnText">Buscar Boletos</span>
+                <div id="loader" class="loader hidden"></div>
+            </button>
+
+            <!-- Results Area -->
+            <div id="resultArea" class="hidden mt-6 text-center animate-fade-in-up">
+                <!-- Content injected via JS -->
+            </div>
+            
+            <!-- Status message (hidden by default unless error) -->
+            <p id="statusMsg" class="text-xs text-center text-gray-400 mt-2"></p>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-8 text-gray-400 text-xs text-center">
+        <p>Sistema de verificación automática</p>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURACIÓN DE GOOGLE SHEETS
+        // ==========================================
+        // 1. Ve a tu Google Sheet -> Archivo -> Compartir -> Publicar en la web
+        // 2. Selecciona formato "Valores separados por comas (.csv)"
+        // 3. Pega el enlace generado aquí abajo dentro de las comillas:
+        
+        const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ8dC_hKPz--zFGOU6gEtK8zqknrxk7wn2yGdDj8HaOHm5Z29ZKiWWGN_W8KX18O5ssS-Pxxr3y641R/pub?output=csv"; 
+        
+        // Si dejas las comillas vacías (""), se usarán datos de demostración.
+        // ==========================================
+
+        // Datos de prueba por si no hay URL configurada
+        const demoData = [
+            { name: "Juan Perez", count: "5" },
+            { name: "María González", count: "10" },
+            { name: "José López", count: "2" }
+        ];
+
+        let currentData = [];
+
+        window.onload = function() {
+            if (GOOGLE_SHEET_URL && GOOGLE_SHEET_URL.length > 5) {
+                fetchData(GOOGLE_SHEET_URL);
+            } else {
+                console.log("Usando datos de demostración (Configura la URL en el código para usar datos reales)");
+                currentData = demoData;
+                document.getElementById('statusMsg').innerText = "Modo Demo (Edita el código para agregar tu URL)";
+            }
+        }
+
+        async function fetchData(url) {
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                currentData = parseCSV(text);
+                console.log("Datos cargados correctamente:", currentData.length, "registros");
+            } catch (error) {
+                console.error("Error cargando Google Sheet:", error);
+                document.getElementById('statusMsg').innerText = "Error cargando la lista. Verifica el enlace.";
+                document.getElementById('statusMsg').classList.add('text-red-500');
+                currentData = demoData; // Fallback
+            }
+        }
+
+        // Parsea el CSV asumiendo Columna A = Nombre, Columna B = Cantidad/Info
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            const result = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                // Dividir por comas, pero tener cuidado si el texto tiene comas
+                const parts = line.split(',');
+                
+                if (parts.length >= 2) {
+                    // Limpiar comillas extras que Google a veces añade
+                    const cleanName = parts[0].replace(/^"|"$/g, '').trim();
+                    // Tomamos la segunda parte (índice 1) como el valor de boletos
+                    const cleanCount = parts[1].replace(/^"|"$/g, '').trim();
+                    
+                    result.push({ name: cleanName, count: cleanCount });
+                }
+            }
+            return result;
+        }
+
+        // Función para normalizar texto (quitar acentos, diéresis y minúsculas)
+        function normalizeText(text) {
+            return text
+                .toString()              // Asegurar que es texto
+                .normalize("NFD")        // Descompone caracteres (ej: é -> e + ´)
+                .replace(/[\u0300-\u036f]/g, "") // Elimina los diacríticos
+                .toLowerCase()           // Todo a minúsculas
+                .trim();                 // Quita espacios extra
+        }
+
+        function searchTicket() {
+            const rawInput = document.getElementById('searchInput').value;
+            const input = normalizeText(rawInput);
+            const resultArea = document.getElementById('resultArea');
+            const loader = document.getElementById('loader');
+            const btnText = document.getElementById('btnText');
+
+            if (!input) return;
+
+            // UI Loading state
+            btnText.classList.add('hidden');
+            loader.classList.remove('hidden');
+            resultArea.classList.add('hidden');
+
+            setTimeout(() => {
+                // Lógica de búsqueda mejorada (sin acentos, case insensitive)
+                // Busca coincidencia exacta o parcial
+                const found = currentData.find(row => {
+                    const rowName = normalizeText(row.name);
+                    // Permitimos que el usuario escriba solo el nombre o nombre y apellido
+                    return rowName === input || rowName.includes(input); 
+                });
+
+                // UI Reset
+                loader.classList.add('hidden');
+                btnText.classList.remove('hidden');
+                resultArea.classList.remove('hidden');
+
+                if (found) {
+                    resultArea.innerHTML = `
+                        <div class="bg-green-50 rounded-xl p-6 border border-green-200">
+                            <div class="text-green-600 font-bold uppercase text-xs tracking-wider mb-2">¡Encontrado!</div>
+                            <h2 class="text-xl font-bold text-gray-800 mb-4 capitalize">${found.name.toLowerCase()}</h2>
+                            <div class="flex flex-col gap-1 items-center justify-center">
+                                <span class="text-gray-500 text-xs">Total de boletos:</span>
+                                <span class="text-4xl font-black text-blue-600">${found.count}</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultArea.innerHTML = `
+                        <div class="bg-red-50 rounded-xl p-6 border border-red-200">
+                            <div class="text-red-500 mb-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-800">No encontrado</h3>
+                            <p class="text-gray-600 text-sm mt-1">No hay registros para "${rawInput}".</p>
+                        </div>
+                    `;
+                }
+            }, 500); 
+        }
+
+        // Permitir búsqueda con Enter
+        document.getElementById('searchInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                searchTicket();
+            }
+        });
+
+    </script>
+</body>
+</html>
